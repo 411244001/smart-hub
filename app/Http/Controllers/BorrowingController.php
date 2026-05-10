@@ -2,64 +2,100 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\borrowing;
+use App\Models\Borrowing;
+use App\Models\Equipment;
 use Illuminate\Http\Request;
 
 class BorrowingController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    // GET /api/borrowings - Lihat semua peminjaman
     public function index()
     {
-        //
+        $borrowings = Borrowing::with(['user', 'equipment'])->get();
+
+        return response()->json([
+            'message' => 'Data peminjaman berhasil diambil',
+            'data'    => $borrowings,
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
+    // POST /api/borrowings - Buat peminjaman baru (check-in tablet)
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'equipment_id' => 'required|exists:equipments,id',
+            'borrow_date'  => 'required|date',
+            'return_date'  => 'nullable|date|after:borrow_date',
+            'notes'        => 'nullable|string',
+        ]);
+
+        // Cek apakah peralatan tersedia
+        $equipment = Equipment::findOrFail($request->equipment_id);
+        if ($equipment->status !== 'available') {
+            return response()->json([
+                'message' => 'Peralatan tidak tersedia',
+            ], 422);
+        }
+
+        // Buat peminjaman
+        $borrowing = Borrowing::create([
+            'user_id'      => $request->user()->id,
+            'equipment_id' => $request->equipment_id,
+            'borrow_date'  => $request->borrow_date,
+            'return_date'  => $request->return_date,
+            'notes'        => $request->notes,
+            'status'       => 'pending',
+        ]);
+
+        // Update status peralatan menjadi borrowed
+        $equipment->update(['status' => 'borrowed']);
+
+        return response()->json([
+            'message' => 'Peminjaman berhasil dibuat',
+            'data'    => $borrowing->load(['user', 'equipment']),
+        ], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(borrowing $borrowing)
+    // GET /api/borrowings/{id} - Lihat 1 peminjaman
+    public function show(Borrowing $borrowing)
     {
-        //
+        return response()->json([
+            'message' => 'Detail peminjaman',
+            'data'    => $borrowing->load(['user', 'equipment']),
+        ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(borrowing $borrowing)
+    // PUT /api/borrowings/{id} - Update status peminjaman
+    public function update(Request $request, Borrowing $borrowing)
     {
-        //
+        $request->validate([
+            'status'      => 'in:pending,approved,returned,rejected',
+            'return_date' => 'nullable|date',
+            'notes'       => 'nullable|string',
+        ]);
+
+        $borrowing->update($request->all());
+
+        // Kalau status returned, kembalikan status peralatan
+        if ($request->status === 'returned') {
+            $borrowing->equipment->update(['status' => 'available']);
+        }
+
+        return response()->json([
+            'message' => 'Peminjaman berhasil diupdate',
+            'data'    => $borrowing->load(['user', 'equipment']),
+        ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, borrowing $borrowing)
+    // DELETE /api/borrowings/{id} - Hapus peminjaman
+    public function destroy(Borrowing $borrowing)
     {
-        //
-    }
+        // Kembalikan status peralatan ke available
+        $borrowing->equipment->update(['status' => 'available']);
+        $borrowing->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(borrowing $borrowing)
-    {
-        //
+        return response()->json([
+            'message' => 'Peminjaman berhasil dihapus',
+        ]);
     }
 }
