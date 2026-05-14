@@ -9,6 +9,8 @@ class Equipment extends Model
 {
     use HasFactory;
 
+    protected $table = 'equipments'; // ← tambahkan baris ini
+
     protected $fillable = [
         'name',
         'category',
