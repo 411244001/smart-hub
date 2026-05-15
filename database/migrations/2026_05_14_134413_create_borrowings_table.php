@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('borrowings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('equipment_id')->constrained()->onDelete('cascade');
+            $table->foreignId('equipment_id')->constrained('equipments')->onDelete('cascade');
             $table->date('borrow_date');
             $table->date('return_date')->nullable();
             $table->enum('status', ['pending', 'approved', 'returned', 'rejected'])
